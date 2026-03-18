@@ -1,0 +1,32 @@
+# Build outputs
+/build/
+/app/build/
+*.apk
+*.aab
+*.ap_
+
+# Gradle
+/.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+
+# IDE
+/.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# Local config
+/local.properties
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# Misc
+*.log
+*.tmp
+*.bak
+*.swp
+*~

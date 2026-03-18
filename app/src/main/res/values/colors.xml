@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="wiom_primary">#D9008D</color>
+    <color name="wiom_primary_light">#FFE5F6</color>
+    <color name="wiom_surface">#FAF9FC</color>
+    <color name="wiom_text">#161021</color>
+    <color name="wiom_header">#443152</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
