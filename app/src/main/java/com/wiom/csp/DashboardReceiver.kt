@@ -9,6 +9,8 @@ import com.wiom.csp.data.Scenario
 import com.wiom.csp.data.TrainingModule
 import com.wiom.csp.util.Lang
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 class DashboardReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -95,6 +97,79 @@ class DashboardReceiver : BroadcastReceiver() {
                         OnboardingState.goTo(6) // Stay on QA screen, show rejected
                     }
                 }
+            }
+            "com.wiom.csp.DUMP_STATE" -> {
+                val s = OnboardingState
+                val json = JSONObject().apply {
+                    put("currentScreen", s.currentScreen)
+                    put("qaRejected", s.qaRejected)
+                    put("isFilledMode", s.isFilledMode)
+
+                    // Personal Information
+                    put("personal", JSONObject().apply {
+                        put("phone", s.phoneNumber)
+                        put("name", s.personalName)
+                        put("email", s.personalEmail)
+                        put("entityType", s.entityType)
+                        put("tradeName", s.tradeName)
+                    })
+
+                    // Location Information
+                    put("location", JSONObject().apply {
+                        put("city", s.city)
+                        put("pincode", s.pincode)
+                        put("address", s.address)
+                    })
+
+                    // KYC Documents
+                    put("kyc", JSONObject().apply {
+                        put("panUploaded", s.panUploaded)
+                        put("aadhaarFrontUploaded", s.aadhaarFrontUploaded)
+                        put("aadhaarBackUploaded", s.aadhaarBackUploaded)
+                        put("gstUploaded", s.gstUploaded)
+                    })
+
+                    // Registration Fee
+                    put("registrationFee", JSONObject().apply {
+                        put("amount", 2000)
+                        put("paid", s.currentScreen > 5)
+                    })
+
+                    // Bank Account Details
+                    put("bank", JSONObject().apply {
+                        put("accountHolder", s.bankAccountHolder)
+                        put("bankName", s.bankName)
+                        put("accountNumber", s.bankAccountNumber)
+                        put("ifsc", s.bankIfsc)
+                        put("verified", s.bankVerified)
+                    })
+
+                    // Technical Review
+                    put("techReview", JSONObject().apply {
+                        put("shopPhotoUploaded", s.shopPhotoUploaded)
+                        put("equipmentReviewed", s.equipmentReviewed)
+                        put("internetSetupType", s.internetSetupType)
+                    })
+
+                    // Onboarding Fee
+                    put("onboardingFee", JSONObject().apply {
+                        put("amount", 20000)
+                        put("paid", s.currentScreen > 11)
+                    })
+
+                    // Active scenario
+                    put("activeScenario", s.activeScenario.name)
+
+                    // Training progress
+                    put("training", JSONObject().apply {
+                        put("totalModules", s.trainingModules.size)
+                        put("completedModules", s.completedModuleIds.size)
+                        put("allCompleted", s.allModulesCompleted())
+                    })
+                }
+
+                val file = File(context.filesDir, "state.json")
+                file.writeText(json.toString(2))
             }
         }
     }

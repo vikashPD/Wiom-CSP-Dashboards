@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiom CSP — Control Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1025; color: #e0d8ec; min-height: 100vh; }
+
+  .header { background: #2d1f3e; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #D9008D; }
+  .header h1 { font-size: 20px; font-weight: 700; color: #fff; }
+  .header h1 span { color: #D9008D; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.on { background: #00c853; box-shadow: 0 0 6px #00c853; }
+  .status-dot.off { background: #d92130; }
+  .status-text { font-size: 12px; color: #a7a1b2; }
+  .nav-link { font-size: 12px; color: #D9008D; text-decoration: none; padding: 6px 12px; border: 1px solid #D9008D; border-radius: 6px; transition: all 0.15s; }
+  .nav-link:hover { background: #D9008D; color: #fff; }
+
+  .main { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px 24px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
+
+  .panel { background: #2d1f3e; border-radius: 12px; padding: 16px; border: 1px solid #3d2f50; margin-bottom: 16px; }
+  .panel-title { font-size: 13px; font-weight: 700; color: #a7a1b2; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+  .btn:active { transform: translateY(0); }
+  .btn-red { background: #d92130; color: #fff; }
+  .btn-default { background: #3d2f50; color: #e0d8ec; }
+  .btn-magenta { background: #D9008D; color: #fff; }
+  .btn-green { background: #008043; color: #fff; }
+  .btn-outline { background: transparent; border: 1px solid #D9008D; color: #D9008D; }
+
+  .screen-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .screen-btn { background: #3d2f50; border: 1px solid #4d3f60; border-radius: 8px; padding: 8px 4px; text-align: center; cursor: pointer; transition: all 0.15s; font-size: 11px; color: #a7a1b2; }
+  .screen-btn:hover { border-color: #D9008D; color: #fff; }
+  .screen-btn.active { background: #D9008D; border-color: #D9008D; color: #fff; }
+  .screen-btn .num { font-size: 16px; font-weight: 700; display: block; }
+  .screen-btn .label { font-size: 10px; display: block; margin-top: 2px; line-height: 1.2; }
+
+  .category-label { font-size: 10px; font-weight: 700; color: #665e75; text-transform: uppercase; letter-spacing: 0.5px; margin: 10px 0 6px; }
+  .scenario-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .scenario-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .scenario-btn:hover { border-color: #D9008D; color: #fff; background: rgba(217,0,141,0.15); }
+  .scenario-btn.active { background: #d92130; border-color: #d92130; color: #fff; }
+
+  .preview-img { width: 100%; border-radius: 8px; background: #161021; min-height: 500px; object-fit: contain; }
+  .preview-label { font-size: 11px; color: #665e75; text-align: center; margin-top: 6px; }
+
+  @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+  .refreshing { animation: pulse 1s infinite; }
+
+  .module-card { background: #3d2f50; border: 1px solid #4d3f60; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .module-card h3 { font-size: 14px; color: #fff; margin-bottom: 8px; }
+  .module-input { width: 100%; background: #2d1f3e; border: 1px solid #4d3f60; border-radius: 8px; padding: 8px 12px; color: #e0d8ec; font-size: 13px; margin-bottom: 8px; box-sizing: border-box; }
+  .module-input:focus { border-color: #D9008D; outline: none; }
+  .module-input::placeholder { color: #665e75; }
+  .question-card { background: #2d1f3e; border: 1px solid #4d3f60; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+  .question-card .q-label { font-size: 11px; color: #a7a1b2; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+  .option-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .option-row input { flex: 1; }
+  .option-row select { width: 60px; background: #3d2f50; border: 1px solid #4d3f60; color: #e0d8ec; border-radius: 6px; padding: 4px; font-size: 12px; }
+  .btn-sm { font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer; border: none; }
+  .btn-sm-add { background: rgba(217,0,141,0.15); color: #D9008D; }
+  .btn-sm-del { background: rgba(217,33,48,0.15); color: #d92130; }
+  .module-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .module-row > * { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Wiom <span>CSP</span> — Control Dashboard</h1>
+  <div class="header-right">
+    <a class="nav-link" href="qa-review.html">Open QA Review →</a>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="status-dot off" id="statusDot"></span>
+      <span class="status-text" id="statusText">Checking...</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left-col">
+    <!-- Controls -->
+    <div class="panel">
+      <div class="panel-title">Controls</div>
+      <div class="controls">
+        <button class="btn btn-red" onclick="send('restart')">Restart App</button>
+        <button class="btn btn-default" onclick="send('reset')">Reset to Screen 0</button>
+        <button class="btn btn-magenta" onclick="sendLang('hi')">हिंदी</button>
+        <button class="btn btn-outline" onclick="sendLang('en')">English</button>
+        <button class="btn btn-green" onclick="refreshScreenshot()">Refresh Screenshot</button>
+        <button class="btn btn-green" onclick="sendFill('filled')">📝 Fill All Screens</button>
+        <button class="btn btn-default" style="background:#e67e00;color:#fff;" onclick="sendFill('empty')">🗑️ Empty All Screens</button>
+      </div>
+    </div>
+
+    <!-- Screen Navigator -->
+    <div class="panel">
+      <div class="panel-title">Screen Navigator</div>
+      <div class="screen-grid" id="screenGrid"></div>
+    </div>
+
+    <!-- Scenarios -->
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="panel-title" style="margin-bottom:0;">Scenario Simulator</div>
+        <button class="btn btn-default" style="font-size:11px;padding:4px 12px;" onclick="clearScenario()">Clear Scenario</button>
+      </div>
+      <div id="scenarioContainer"></div>
+    </div>
+
+    <!-- Training Module Manager -->
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="panel-title" style="margin-bottom:0;">Training Module Manager</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-green" style="font-size:11px;padding:4px 12px;" onclick="addModule()">+ Add Module</button>
+          <button class="btn btn-magenta" style="font-size:11px;padding:4px 12px;" onclick="saveTrainingConfig()">Save to App</button>
+        </div>
+      </div>
+      <div id="trainingModules"></div>
+    </div>
+  </div>
+
+  <!-- Live Preview -->
+  <div class="right-col">
+    <div class="panel" style="position:sticky;top:16px;">
+      <div class="panel-title">Live Preview</div>
+      <img class="preview-img" id="previewImg" src="about:blank" alt="App Screenshot" onerror="this.src='about:blank'">
+      <div class="preview-label">Auto-refreshes on actions</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BRIDGE = 'http://localhost:8092';
+let currentScreen = 0;
+let activeScenario = null;
+
+const screens = [
+  { num: 0, hi: 'मोबाइल नंबर', en: 'Phone' },
+  { num: 1, hi: 'OTP वेरिफिकेशन', en: 'OTP' },
+  { num: 2, hi: 'व्यक्तिगत जानकारी', en: 'Personal' },
+  { num: 3, hi: 'लोकेशन', en: 'Location' },
+  { num: 4, hi: 'KYC दस्तावेज़', en: 'KYC' },
+  { num: 5, hi: 'रजिस्ट्रेशन फ़ीस', en: '₹2K Fee' },
+  { num: 6, hi: 'QA Investigation', en: 'QA' },
+  { num: 7, hi: 'नीतियां और रेट कार्ड', en: 'Policy' },
+  { num: 8, hi: 'Bank + Dedup', en: 'Bank' },
+  { num: 9, hi: 'एग्रीमेंट', en: 'Agreement' },
+  { num: 10, hi: 'तकनीकी समीक्षा', en: 'Tech' },
+  { num: 11, hi: 'ऑनबोर्डिंग फ़ीस', en: '₹20K Fee' },
+  { num: 12, hi: 'फ़ाइनेंशियल सेटअप', en: 'Finance' },
+  { num: 13, hi: 'ट्रेनिंग', en: 'Training' },
+  { num: 14, hi: 'Go Live!', en: 'Live' },
+];
+
+const scenarios = [
+  { name: 'PHONE_DUPLICATE', icon: '📱', label: 'Phone Already Registered', category: 'registration', screen: 0 },
+  { name: 'OTP_WRONG', icon: '❌', label: 'Wrong OTP', category: 'registration', screen: 1 },
+  { name: 'OTP_EXPIRED', icon: '⏰', label: 'OTP Expired', category: 'registration', screen: 1 },
+  { name: 'AREA_NOT_SERVICEABLE', icon: '📍', label: 'Area Not Serviceable', category: 'verification', screen: 3 },
+  { name: 'KYC_PAN_MISMATCH', icon: '🪪', label: 'PAN Name Mismatch', category: 'verification', screen: 4 },
+  { name: 'KYC_AADHAAR_EXPIRED', icon: '⚠️', label: 'Aadhaar Expired', category: 'verification', screen: 4 },
+  { name: 'KYC_PAN_AADHAAR_UNLINKED', icon: '🔗', label: 'PAN-Aadhaar Not Linked', category: 'verification', screen: 4 },
+  { name: 'REGFEE_FAILED', icon: '💳', label: '₹2K Payment Failed', category: 'payment', screen: 5 },
+  { name: 'REGFEE_TIMEOUT', icon: '⏳', label: '₹2K Payment Timeout', category: 'payment', screen: 5 },
+  { name: 'BANK_PENNYDROP_FAIL', icon: '🏦', label: 'Penny Drop Failed', category: 'bank', screen: 8 },
+  { name: 'BANK_NAME_MISMATCH', icon: '👤', label: 'Bank Name Mismatch', category: 'bank', screen: 8 },
+  { name: 'DEDUP_FOUND', icon: '🔍', label: 'Dedup Match Found', category: 'bank', screen: 8 },
+  { name: 'ESIGN_FAILED', icon: '✍️', label: 'e-Sign Failed', category: 'documentation', screen: 9 },
+  { name: 'TECH_DEVICE_INCOMPATIBLE', icon: '📵', label: 'Device Incompatible', category: 'documentation', screen: 10 },
+  { name: 'ONBOARDFEE_FAILED', icon: '💸', label: '₹20K Payment Failed', category: 'payment', screen: 11 },
+  { name: 'TRAINING_QUIZ_FAIL', icon: '📝', label: 'Quiz Failed', category: 'training', screen: 13 },
+];
+
+const categoryNames = { registration: 'Registration', verification: 'Verification', payment: 'Payment', bank: 'Bank', documentation: 'Documentation', training: 'Training' };
+
+function buildScreenGrid() {
+  const grid = document.getElementById('screenGrid');
+  grid.innerHTML = '';
+  screens.forEach(s => {
+    const btn = document.createElement('div');
+    btn.className = 'screen-btn' + (currentScreen === s.num ? ' active' : '');
+    btn.innerHTML = `<span class="num">${s.num}</span><span class="label">${s.hi}</span><span class="label" style="color:#665e75;font-size:9px;">${s.en}</span>`;
+    btn.onclick = () => navigateTo(s.num);
+    grid.appendChild(btn);
+  });
+}
+
+function buildScenarios() {
+  const container = document.getElementById('scenarioContainer');
+  container.innerHTML = '';
+  const grouped = {};
+  scenarios.forEach(s => { if (!grouped[s.category]) grouped[s.category] = []; grouped[s.category].push(s); });
+  for (const [cat, items] of Object.entries(grouped)) {
+    const label = document.createElement('div'); label.className = 'category-label'; label.textContent = categoryNames[cat] || cat; container.appendChild(label);
+    const row = document.createElement('div'); row.className = 'scenario-grid';
+    items.forEach(s => {
+      const btn = document.createElement('div');
+      btn.className = 'scenario-btn' + (activeScenario === s.name ? ' active' : '');
+      btn.textContent = `${s.icon} ${s.label}`;
+      btn.onclick = () => triggerScenario(s.name);
+      row.appendChild(btn);
+    });
+    container.appendChild(row);
+  }
+}
+
+async function post(body) {
+  try { const res = await fetch(BRIDGE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return await res.json(); }
+  catch (e) { console.error('Bridge error:', e); return null; }
+}
+
+async function send(action) { await post({ action }); setTimeout(refreshScreenshot, 500); }
+async function sendLang(lang) { await post({ action: 'lang', lang }); setTimeout(refreshScreenshot, 500); }
+async function sendFill(mode) { await post({ action: 'fill', mode }); setTimeout(refreshScreenshot, 500); }
+
+async function navigateTo(screen) {
+  currentScreen = screen; buildScreenGrid();
+  await post({ action: 'navigate', screen }); setTimeout(refreshScreenshot, 500);
+}
+
+async function triggerScenario(name) {
+  activeScenario = name; buildScenarios();
+  await post({ action: 'scenario', name }); setTimeout(refreshScreenshot, 500);
+}
+
+async function clearScenario() {
+  activeScenario = null; buildScenarios();
+  await post({ action: 'scenario', name: 'NONE' }); setTimeout(refreshScreenshot, 500);
+}
+
+function refreshScreenshot() {
+  document.getElementById('previewImg').src = BRIDGE + '/screenshot?t=' + Date.now();
+}
+
+async function checkStatus() {
+  try {
+    const res = await fetch(BRIDGE + '/status'); const data = await res.json();
+    document.getElementById('statusDot').className = 'status-dot ' + (data.connected ? 'on' : 'off');
+    document.getElementById('statusText').textContent = data.connected ? 'Device Connected' : 'No Device';
+  } catch (e) {
+    document.getElementById('statusDot').className = 'status-dot off';
+    document.getElementById('statusText').textContent = 'Bridge Offline';
+  }
+}
+
+// ─── Training Module Manager ─────────────────────────────────
+let trainingModulesData = [
+  { id: 'app_usage', titleHi: 'App कैसे चलाएं', titleEn: 'How to use the App', subtitleHi: 'Customer, रीचार्ज, शिकायतें', subtitleEn: 'Customer, Recharge, Complaints', icon: '📱', videoUrl: '',
+    questions: [
+      { questionHi: 'ग्राहक का नया कनेक्शन कैसे बनाएं?', questionEn: 'How to create a new customer connection?', options: [['Settings से','From Settings'],['Home > Add Customer से','From Home > Add Customer'],['Profile से','From Profile'],['Help से','From Help']], correctIndex: 1, hintHi: "Home screen पर 'Add Customer' बटन दबाएं", hintEn: "Press 'Add Customer' button on Home screen" },
+      { questionHi: 'रिचार्ज status कहां देखें?', questionEn: 'Where to check recharge status?', options: [['Settings','Settings'],['Home','Home'],['Earnings > Transactions','Earnings > Transactions'],['Profile','Profile']], correctIndex: 2, hintHi: 'Earnings section में Transactions tab पर जाएं', hintEn: 'Go to Transactions tab in Earnings section' },
+    ]},
+  { id: 'sla_exposure', titleHi: 'SLA और Exposure', titleEn: 'SLA & Exposure', subtitleHi: 'नियम, स्तर, प्रभाव', subtitleEn: 'Rules, Levels, Impact', icon: '📊', videoUrl: '',
+    questions: [
+      { questionHi: 'ग्राहक शिकायत का resolution time क्या है?', questionEn: 'What is customer complaint resolution time?', options: [['24 घंटे','24 hours'],['4 घंटे','4 hours'],['48 घंटे','48 hours'],['1 हफ्ता','1 week']], correctIndex: 1, hintHi: 'SLA के अनुसार 4 घंटे में समाधान करना ज़रूरी है', hintEn: 'Resolution within 4 hours is required as per SLA' },
+      { questionHi: 'Minimum uptime requirement क्या है?', questionEn: 'What is minimum uptime requirement?', options: [['90%','90%'],['95%','95%'],['99%','99%'],['80%','80%']], correctIndex: 1, hintHi: 'Connection 95%+ चालू रहना चाहिए', hintEn: 'Connection should be running 95%+' },
+    ]},
+  { id: 'money_matters', titleHi: 'पैसों की बात', titleEn: 'Money Matters', subtitleHi: 'Commission, TDS, TCS', subtitleEn: 'Commission, TDS, TCS', icon: '💰', videoUrl: '',
+    questions: [
+      { questionHi: 'नए कनेक्शन पर कमीशन कितना है?', questionEn: 'Commission on new connection?', options: [['₹150','₹150'],['₹200','₹200'],['₹300','₹300'],['₹500','₹500']], correctIndex: 2, hintHi: 'हर नए कनेक्शन पर ₹300 मिलता है', hintEn: 'You get ₹300 for every new connection' },
+      { questionHi: 'Commission payout कब होता है?', questionEn: 'When is commission payout?', options: [['Daily','Daily'],['Weekly (Monday)','Weekly (Monday)'],['Monthly','Monthly'],['Quarterly','Quarterly']], correctIndex: 1, hintHi: 'हर Monday को bank account में payout होता है', hintEn: 'Payout happens every Monday to bank account' },
+    ]},
+];
+
+function buildTrainingUI() {
+  const container = document.getElementById('trainingModules');
+  container.innerHTML = '';
+  trainingModulesData.forEach((mod, mi) => {
+    const card = document.createElement('div'); card.className = 'module-card';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h3>${mod.icon} Module ${mi+1}: ${mod.titleEn}</h3>
+        <button class="btn-sm btn-sm-del" onclick="removeModule(${mi})">Remove</button>
+      </div>
+      <div class="module-row">
+        <div><label style="font-size:10px;color:#a7a1b2;">Title (Hindi)</label><input class="module-input" value="${mod.titleHi}" onchange="trainingModulesData[${mi}].titleHi=this.value"></div>
+        <div><label style="font-size:10px;color:#a7a1b2;">Title (English)</label><input class="module-input" value="${mod.titleEn}" onchange="trainingModulesData[${mi}].titleEn=this.value"></div>
+      </div>
+      <div class="module-row">
+        <div><label style="font-size:10px;color:#a7a1b2;">Icon (emoji)</label><input class="module-input" value="${mod.icon}" style="width:60px;" onchange="trainingModulesData[${mi}].icon=this.value"></div>
+        <div style="flex:3;"><label style="font-size:10px;color:#a7a1b2;">Video URL</label><input class="module-input" value="${mod.videoUrl}" placeholder="https://youtube.com/..." onchange="trainingModulesData[${mi}].videoUrl=this.value"></div>
+      </div>
+      <div style="font-size:11px;color:#a7a1b2;font-weight:700;margin:8px 0 4px;">QUESTIONS</div>
+      <div id="questions-${mi}"></div>
+      <button class="btn-sm btn-sm-add" onclick="addQuestion(${mi})">+ Add Question</button>
+    `;
+    container.appendChild(card);
+    const qContainer = card.querySelector(`#questions-${mi}`);
+    mod.questions.forEach((q, qi) => {
+      const qCard = document.createElement('div'); qCard.className = 'question-card';
+      qCard.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;"><span class="q-label">Q${qi+1}</span><button class="btn-sm btn-sm-del" onclick="removeQuestion(${mi},${qi})">x</button></div>
+        <input class="module-input" value="${q.questionHi}" placeholder="Question (Hindi)" onchange="trainingModulesData[${mi}].questions[${qi}].questionHi=this.value">
+        <input class="module-input" value="${q.questionEn}" placeholder="Question (English)" onchange="trainingModulesData[${mi}].questions[${qi}].questionEn=this.value">
+        <div style="font-size:10px;color:#665e75;margin:4px 0;">Options (Hindi | English) — Correct: <select onchange="trainingModulesData[${mi}].questions[${qi}].correctIndex=parseInt(this.value)">
+          ${q.options.map((o,oi) => `<option value="${oi}" ${oi===q.correctIndex?'selected':''}>${oi+1}</option>`).join('')}
+        </select></div>
+        ${q.options.map((o,oi) => `<div class="option-row"><span style="font-size:11px;color:#665e75;width:20px;">${oi+1}.</span><input class="module-input" style="margin-bottom:0;" value="${o[0]}" onchange="trainingModulesData[${mi}].questions[${qi}].options[${oi}][0]=this.value"><input class="module-input" style="margin-bottom:0;" value="${o[1]}" onchange="trainingModulesData[${mi}].questions[${qi}].options[${oi}][1]=this.value"></div>`).join('')}
+        <input class="module-input" value="${q.hintHi}" placeholder="Hint (Hindi)" style="margin-top:6px;" onchange="trainingModulesData[${mi}].questions[${qi}].hintHi=this.value">
+        <input class="module-input" value="${q.hintEn}" placeholder="Hint (English)" onchange="trainingModulesData[${mi}].questions[${qi}].hintEn=this.value">
+      `;
+      qContainer.appendChild(qCard);
+    });
+  });
+}
+
+function addModule() {
+  trainingModulesData.push({ id: 'module_' + Date.now(), titleHi: '', titleEn: '', subtitleHi: '', subtitleEn: '', icon: '📚', videoUrl: '', questions: [] });
+  buildTrainingUI();
+}
+function removeModule(mi) { trainingModulesData.splice(mi, 1); buildTrainingUI(); }
+function addQuestion(mi) {
+  trainingModulesData[mi].questions.push({ questionHi: '', questionEn: '', options: [['',''],['',''],['',''],['','']], correctIndex: 0, hintHi: '', hintEn: '' });
+  buildTrainingUI();
+}
+function removeQuestion(mi, qi) { trainingModulesData[mi].questions.splice(qi, 1); buildTrainingUI(); }
+async function saveTrainingConfig() {
+  await post({ action: 'training_config', modules: trainingModulesData });
+  alert('Training config saved! Restart the app to see changes.');
+}
+
+// Init
+buildScreenGrid(); buildScenarios(); buildTrainingUI(); checkStatus();
+setInterval(checkStatus, 5000);
+setTimeout(refreshScreenshot, 1000);
+</script>
+</body>
+</html>

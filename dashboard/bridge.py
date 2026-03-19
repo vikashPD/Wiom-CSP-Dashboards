@@ -5,6 +5,7 @@ import json
 import subprocess
 import os
 import sys
+import time
 
 ADB = os.path.expanduser("~/Library/Android/sdk/platform-tools/adb")
 
@@ -20,8 +21,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path == "/status":
-            # Check if device is connected
+        path = self.path.split("?")[0]
+
+        if path == "/status":
             result = subprocess.run([ADB, "devices"], capture_output=True, text=True)
             connected = "device" in result.stdout.split("\n", 1)[-1]
             self.send_response(200)
@@ -29,7 +31,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({"connected": connected}).encode())
-        elif self.path == "/screenshot":
+
+        elif path == "/screenshot":
             subprocess.run([ADB, "exec-out", "screencap", "-p"],
                          stdout=open("/tmp/csp_dash_screen.png", "wb"))
             self.send_response(200)
@@ -38,6 +41,38 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             with open("/tmp/csp_dash_screen.png", "rb") as f:
                 self.wfile.write(f.read())
+
+        elif path == "/data":
+            # Trigger DUMP_STATE broadcast, wait, then read the JSON
+            subprocess.run([ADB, "shell", "am", "broadcast", "-a", "com.wiom.csp.DUMP_STATE",
+                           "-n", "com.wiom.csp/.DashboardReceiver"], capture_output=True)
+            time.sleep(0.3)
+            result = subprocess.run(
+                [ADB, "shell", "run-as", "com.wiom.csp", "cat", "/data/data/com.wiom.csp/files/state.json"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                self.send_response(200)
+                self._cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(result.stdout.strip().encode())
+            else:
+                self.send_response(200)
+                self._cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "No data yet. Fill the app first."}).encode())
+
+        elif path == "/kyc-image":
+            # Serve a placeholder KYC document image (screenshot of the KYC screen)
+            # In production this would fetch actual uploaded documents
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"info": "KYC images are stored on device. Use screenshot to view."}).encode())
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -73,10 +108,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                    "--es", "action", decision, "-n", "com.wiom.csp/.DashboardReceiver"]
         elif action == "training_config":
             modules = body.get("modules", [])
-            # Write JSON to a temp file on device, then broadcast
-            import tempfile
             config_json = json.dumps(modules)
-            # ADB broadcast with extra string (max ~500KB for Intent extras)
             cmd = [ADB, "shell", "am", "broadcast", "-a", "com.wiom.csp.TRAINING",
                    "--es", "config", config_json, "-n", "com.wiom.csp/.DashboardReceiver"]
         elif action == "restart":

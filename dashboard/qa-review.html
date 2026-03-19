@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiom CSP — QA Review Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0a18; color: #e0d8ec; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* ─── Header ─────────────────────────────────────────── */
+  .header { background: #1e1530; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #D9008D; flex-shrink: 0; }
+  .header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+  .header h1 span { color: #D9008D; }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .nav-link { font-size: 12px; color: #D9008D; text-decoration: none; padding: 5px 12px; border: 1px solid #D9008D; border-radius: 6px; transition: all 0.15s; }
+  .nav-link:hover { background: #D9008D; color: #fff; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .status-dot.on { background: #00c853; box-shadow: 0 0 6px #00c853; }
+  .status-dot.off { background: #d92130; }
+  .status-text { font-size: 12px; color: #a7a1b2; }
+
+  /* ─── Layout: List + Detail ──────────────────────────── */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* ─── Left: Application List ─────────────────────────── */
+  .list-panel { width: 340px; min-width: 340px; background: #1a1228; border-right: 1px solid #2d1f3e; display: flex; flex-direction: column; overflow: hidden; }
+  .list-header { padding: 16px; border-bottom: 1px solid #2d1f3e; }
+  .list-header h2 { font-size: 14px; color: #a7a1b2; font-weight: 600; margin-bottom: 10px; }
+  .list-stats { display: flex; gap: 8px; margin-bottom: 12px; }
+  .stat-chip { font-size: 11px; padding: 4px 10px; border-radius: 888px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+  .stat-chip:hover { opacity: 0.85; }
+  .stat-chip.active { box-shadow: 0 0 0 2px #D9008D; }
+  .stat-all { background: #2d1f3e; color: #a7a1b2; }
+  .stat-pending { background: rgba(230,126,0,0.15); color: #e67e00; border-color: rgba(230,126,0,0.3); }
+  .stat-approved { background: rgba(0,128,67,0.15); color: #00c853; border-color: rgba(0,128,67,0.3); }
+  .stat-rejected { background: rgba(217,33,48,0.15); color: #d92130; border-color: rgba(217,33,48,0.3); }
+
+  .search-box { width: 100%; padding: 8px 12px; background: #2d1f3e; border: 1px solid #3d2f50; border-radius: 8px; color: #e0d8ec; font-size: 13px; outline: none; }
+  .search-box::placeholder { color: #665e75; }
+  .search-box:focus { border-color: #D9008D; }
+
+  .list-scroll { flex: 1; overflow-y: auto; padding: 8px; }
+  .list-scroll::-webkit-scrollbar { width: 4px; }
+  .list-scroll::-webkit-scrollbar-thumb { background: #3d2f50; border-radius: 4px; }
+
+  /* App card in list */
+  .app-card { background: #1e1530; border: 1px solid #2d1f3e; border-radius: 12px; padding: 14px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; position: relative; }
+  .app-card:hover { background: #251b38; border-color: #3d2f50; }
+  .app-card.selected { border-color: #D9008D; background: #251b38; box-shadow: 0 0 0 1px #D9008D; }
+  .app-card .app-name { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .app-card .app-phone { font-size: 12px; color: #a7a1b2; margin-bottom: 6px; }
+  .app-card .app-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .app-card .app-tag { font-size: 10px; padding: 2px 8px; border-radius: 888px; font-weight: 600; }
+  .tag-pending { background: rgba(230,126,0,0.15); color: #e67e00; }
+  .tag-approved { background: rgba(0,128,67,0.15); color: #00c853; }
+  .tag-rejected { background: rgba(217,33,48,0.15); color: #d92130; }
+  .app-card .app-time { font-size: 10px; color: #665e75; }
+  .app-card .live-badge { position: absolute; top: 8px; right: 8px; font-size: 9px; background: #D9008D; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.3px; }
+
+  /* ─── Right: Detail Panel ────────────────────────────── */
+  .detail-panel { flex: 1; overflow-y: auto; padding: 24px; }
+  .detail-panel::-webkit-scrollbar { width: 6px; }
+  .detail-panel::-webkit-scrollbar-thumb { background: #3d2f50; border-radius: 4px; }
+
+  .empty-detail { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #665e75; }
+  .empty-detail .icon { font-size: 64px; margin-bottom: 16px; opacity: 0.5; }
+  .empty-detail h2 { font-size: 18px; margin-bottom: 8px; color: #a7a1b2; }
+  .empty-detail p { font-size: 13px; }
+
+  /* Detail header */
+  .detail-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+  .detail-applicant h2 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .detail-applicant .sub { font-size: 13px; color: #a7a1b2; }
+  .detail-applicant .sub strong { color: #D9008D; }
+
+  /* Decision buttons */
+  .decision-box { display: flex; gap: 10px; align-items: center; }
+  .qa-btn { border: none; border-radius: 10px; padding: 12px 24px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .qa-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+  .qa-btn:active { transform: translateY(0); }
+  .qa-btn-approve { background: #008043; color: #fff; }
+  .qa-btn-approve:hover { background: #00a854; }
+  .qa-btn-reject { background: #d92130; color: #fff; }
+  .qa-btn-reject:hover { background: #f5222d; }
+  .qa-btn-reverse { background: #2d1f3e; color: #a7a1b2; border: 1px solid #3d2f50; font-size: 12px; padding: 8px 16px; }
+  .qa-btn-reverse:hover { border-color: #D9008D; color: #D9008D; }
+
+  .current-decision { font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 6px; }
+  .decision-approved { background: rgba(0,128,67,0.15); color: #00c853; border: 1px solid rgba(0,128,67,0.3); }
+  .decision-rejected { background: rgba(217,33,48,0.15); color: #d92130; border: 1px solid rgba(217,33,48,0.3); }
+
+  /* Summary strip */
+  .summary-strip { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .summary-chip { background: #1e1530; border: 1px solid #2d1f3e; border-radius: 10px; padding: 10px 16px; flex: 1; min-width: 120px; text-align: center; }
+  .summary-chip .val { font-size: 16px; font-weight: 700; color: #fff; }
+  .summary-chip .lbl { font-size: 10px; color: #665e75; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+  /* Section cards */
+  .section { background: #1e1530; border: 1px solid #2d1f3e; border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
+  .section-header { padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: background 0.15s; }
+  .section-header:hover { background: rgba(217,0,141,0.04); }
+  .section-header h3 { font-size: 14px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .section-badge { font-size: 10px; padding: 3px 10px; border-radius: 888px; font-weight: 600; }
+  .badge-filled { background: rgba(0,128,67,0.2); color: #00c853; border: 1px solid rgba(0,128,67,0.3); }
+  .badge-empty { background: rgba(217,33,48,0.15); color: #d92130; border: 1px solid rgba(217,33,48,0.2); }
+  .badge-partial { background: rgba(230,126,0,0.15); color: #e67e00; border: 1px solid rgba(230,126,0,0.2); }
+  .badge-paid { background: rgba(0,128,67,0.2); color: #00c853; border: 1px solid rgba(0,128,67,0.3); }
+  .chevron { color: #665e75; font-size: 16px; transition: transform 0.2s; }
+  .section.open .chevron { transform: rotate(180deg); }
+  .section-body { padding: 0 18px 18px; display: none; }
+  .section.open .section-body { display: block; }
+
+  .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .data-field { background: #2d1f3e; border-radius: 10px; padding: 10px 14px; }
+  .data-label { font-size: 10px; font-weight: 700; color: #665e75; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .data-value { font-size: 14px; color: #fff; font-weight: 500; word-break: break-all; }
+  .data-value.empty { color: #665e75; font-style: italic; }
+  .data-field.full-width { grid-column: 1 / -1; }
+
+  .kyc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .kyc-card { background: #2d1f3e; border-radius: 10px; padding: 14px; text-align: center; border: 1px solid #3d2f50; }
+  .kyc-icon { font-size: 28px; margin-bottom: 6px; }
+  .kyc-name { font-size: 11px; color: #a7a1b2; font-weight: 600; margin-bottom: 6px; }
+  .kyc-status { font-size: 10px; padding: 3px 10px; border-radius: 888px; font-weight: 600; display: inline-block; }
+  .kyc-uploaded { background: rgba(0,128,67,0.2); color: #00c853; }
+  .kyc-missing { background: rgba(217,33,48,0.15); color: #d92130; }
+  .kyc-view-btn { display: inline-block; margin-top: 6px; font-size: 10px; color: #D9008D; cursor: pointer; text-decoration: underline; }
+
+  /* Document Viewer Overlay */
+  .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 200; align-items: center; justify-content: center; flex-direction: column; }
+  .overlay.show { display: flex; }
+  .overlay-close { position: absolute; top: 20px; right: 20px; font-size: 28px; color: #fff; cursor: pointer; background: rgba(217,33,48,0.8); border: none; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; z-index: 210; }
+  .overlay-close:hover { background: #d92130; }
+  .doc-viewer { background: #1e1530; border-radius: 16px; border: 1px solid #3d2f50; max-width: 520px; width: 90%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; }
+  .doc-viewer-header { padding: 16px 20px; border-bottom: 1px solid #2d1f3e; display: flex; align-items: center; justify-content: space-between; }
+  .doc-viewer-header h3 { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .doc-viewer-header .doc-type-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600; background: rgba(217,0,141,0.15); color: #D9008D; }
+  .doc-viewer-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; align-items: center; justify-content: center; }
+  .doc-viewer-body::-webkit-scrollbar { width: 4px; }
+  .doc-viewer-body::-webkit-scrollbar-thumb { background: #3d2f50; border-radius: 4px; }
+  .doc-image { max-width: 100%; max-height: 60vh; border-radius: 8px; border: 1px solid #2d1f3e; }
+  .doc-viewer-footer { padding: 12px 20px; border-top: 1px solid #2d1f3e; display: flex; align-items: center; justify-content: space-between; }
+  .doc-meta { font-size: 11px; color: #665e75; }
+  .doc-meta strong { color: #a7a1b2; }
+  .doc-actions { display: flex; gap: 8px; }
+  .doc-action-btn { font-size: 11px; padding: 6px 12px; border-radius: 6px; border: 1px solid #3d2f50; background: #2d1f3e; color: #a7a1b2; cursor: pointer; transition: all 0.15s; }
+  .doc-action-btn:hover { border-color: #D9008D; color: #D9008D; }
+
+  /* KYC card clickable states */
+  .kyc-card.clickable { cursor: pointer; transition: all 0.15s; }
+  .kyc-card.clickable:hover { border-color: #D9008D; background: #3d2f50; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #2d1f3e; border: 1px solid #D9008D; color: #fff; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; z-index: 300; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    .list-panel { width: 100%; min-width: 0; max-height: 280px; border-right: none; border-bottom: 1px solid #2d1f3e; }
+    .kyc-grid { grid-template-columns: repeat(2, 1fr); }
+    .data-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────────────────────── -->
+<div class="header">
+  <h1>Wiom <span>CSP</span> — QA Review</h1>
+  <div class="header-right">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="status-dot off" id="statusDot"></span>
+      <span class="status-text" id="statusText">Checking...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Layout ─────────────────────────────────────────── -->
+<div class="layout">
+  <!-- Left: Application List -->
+  <div class="list-panel">
+    <div class="list-header">
+      <h2>📋 Applications</h2>
+      <div class="list-stats" id="filterBar"></div>
+      <input class="search-box" id="searchBox" type="text" placeholder="Search by name, phone, city..." oninput="renderList()">
+    </div>
+    <div class="list-scroll" id="appList"></div>
+  </div>
+
+  <!-- Right: Detail -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="empty-detail">
+      <div class="icon">👈</div>
+      <h2>Select an Application</h2>
+      <p>Click on any application from the list to review details.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Document Viewer Overlay -->
+<div class="overlay" id="overlay">
+  <button class="overlay-close" onclick="closeOverlay()">×</button>
+  <div class="doc-viewer" id="docViewer"></div>
+</div>
+
+<script>
+const BRIDGE = 'http://localhost:8092';
+let selectedAppId = null;
+let applications = [];
+let activeFilter = 'all';
+
+// ─── Mock Applications Data ────────────────────────────
+// These simulate multiple CSP applications submitted for QA review
+// All have paid ₹2K (because only paid applications reach QA)
+// ─── Generate mock KYC document images via canvas ───────
+function generateDocImage(docType, name, number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 400; canvas.height = 260;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, 400, 260);
+  if (docType === 'PAN') { grad.addColorStop(0, '#1a3a5c'); grad.addColorStop(1, '#0d2137'); }
+  else if (docType.includes('Aadhaar')) { grad.addColorStop(0, '#1a4a2e'); grad.addColorStop(1, '#0d2818'); }
+  else { grad.addColorStop(0, '#4a1a3c'); grad.addColorStop(1, '#2d0d22'); }
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 400, 260, 12);
+  ctx.fill();
+
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(1, 1, 398, 258, 12);
+  ctx.stroke();
+
+  // Header stripe
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(0, 0, 400, 48);
+
+  // Doc type label
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px -apple-system, sans-serif';
+  ctx.fillText(docType === 'PAN' ? '🇮🇳  INCOME TAX DEPARTMENT' : docType.includes('Aadhaar') ? '🇮🇳  AADHAAR — UIDAI' : '🇮🇳  GST CERTIFICATE', 16, 30);
+
+  // Document title
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillText(docType === 'PAN' ? 'Permanent Account Number Card' : docType.includes('Aadhaar') ? 'Unique Identification Authority of India' : 'Goods & Services Tax Registration', 16, 68);
+
+  // Name
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 18px -apple-system, sans-serif';
+  ctx.fillText(name, 16, 105);
+
+  // Number
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '12px monospace';
+  ctx.fillText(number, 16, 130);
+
+  // Photo placeholder
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.beginPath();
+  ctx.roundRect(300, 64, 80, 96, 6);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.font = '28px sans-serif';
+  ctx.fillText('👤', 322, 122);
+
+  // Bottom details
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.fillText('Date of Issue: 15/01/2024', 16, 175);
+  ctx.fillText(docType === 'PAN' ? 'Date of Birth: XX/XX/XXXX' : docType.includes('Aadhaar') ? 'DOB: XX/XX/XXXX  |  Gender: —' : 'GSTIN: XXXXXXXXXXXXXXXXX', 16, 195);
+
+  // Watermark
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.font = 'bold 48px -apple-system, sans-serif';
+  ctx.save();
+  ctx.translate(200, 200);
+  ctx.rotate(-0.3);
+  ctx.fillText('SAMPLE', -80, 10);
+  ctx.restore();
+
+  // Verified stamp
+  ctx.fillStyle = 'rgba(0,200,83,0.15)';
+  ctx.beginPath();
+  ctx.arc(350, 210, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0,200,83,0.6)';
+  ctx.font = 'bold 10px -apple-system, sans-serif';
+  ctx.fillText('VERIFIED', 322, 214);
+
+  return canvas.toDataURL('image/png');
+}
+
+// Pre-generate document data for mock apps
+function generateDocsForApp(personal) {
+  const name = personal.name || 'Unknown';
+  return {
+    pan: { image: null, number: 'XXXPX' + Math.floor(1000 + Math.random() * 9000) + 'X', fileType: 'Image (JPG)', fileSize: '245 KB', uploadedAt: '2026-03-15 14:30' },
+    aadhaarFront: { image: null, number: 'XXXX XXXX ' + Math.floor(1000 + Math.random() * 9000), fileType: 'Image (JPG)', fileSize: '312 KB', uploadedAt: '2026-03-15 14:32' },
+    aadhaarBack: { image: null, number: 'XXXX XXXX ' + Math.floor(1000 + Math.random() * 9000), fileType: 'Image (JPG)', fileSize: '298 KB', uploadedAt: '2026-03-15 14:33' },
+    gst: { image: null, number: 'XX' + Math.floor(10 + Math.random() * 90) + 'XXXXX' + Math.floor(1000 + Math.random() * 9000) + 'X1ZX', fileType: 'PDF', fileSize: '156 KB', uploadedAt: '2026-03-15 14:35' },
+    _name: name,
+  };
+}
+
+// Lazy-generate doc images (only when needed)
+function getDocImage(docs, docKey) {
+  const name = docs._name;
+  if (docKey === 'pan' && !docs.pan.image) docs.pan.image = generateDocImage('PAN', name, docs.pan.number);
+  if (docKey === 'aadhaarFront' && !docs.aadhaarFront.image) docs.aadhaarFront.image = generateDocImage('Aadhaar Front', name, docs.aadhaarFront.number);
+  if (docKey === 'aadhaarBack' && !docs.aadhaarBack.image) docs.aadhaarBack.image = generateDocImage('Aadhaar Back', name, docs.aadhaarBack.number);
+  if (docKey === 'gst' && !docs.gst.image) docs.gst.image = generateDocImage('GST Certificate', name, docs.gst.number);
+  return docs[docKey].image;
+}
+
+const MOCK_APPS = [
+  {
+    id: 'CSP-2026-0042',
+    submittedAt: '2026-03-18T14:30:00',
+    decision: null,
+    personal: { name: 'सुनीता देवी', phone: '9812345678', email: 'sunita.devi@gmail.com', entityType: 'Individual', tradeName: 'Sunita Net Zone' },
+    location: { city: 'Jaipur', pincode: '302001', address: '45, Tonk Road, Jaipur' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: true, gstUploaded: false },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+  {
+    id: 'CSP-2026-0041',
+    submittedAt: '2026-03-18T11:15:00',
+    decision: 'approved',
+    personal: { name: 'अमित शर्मा', phone: '9998877665', email: 'amit.sharma@yahoo.com', entityType: 'Proprietorship', tradeName: 'Amit Telecom Services' },
+    location: { city: 'Lucknow', pincode: '226001', address: '78, Hazratganj, Lucknow' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: true, gstUploaded: true },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+  {
+    id: 'CSP-2026-0040',
+    submittedAt: '2026-03-17T16:45:00',
+    decision: 'rejected',
+    personal: { name: 'प्रदीप यादव', phone: '8877665544', email: 'pradeep.y@outlook.com', entityType: 'Partnership', tradeName: 'Pradeep & Sons Internet' },
+    location: { city: 'Bhopal', pincode: '462001', address: '12, MP Nagar Zone 2, Bhopal' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: false, gstUploaded: true },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+  {
+    id: 'CSP-2026-0039',
+    submittedAt: '2026-03-17T09:20:00',
+    decision: null,
+    personal: { name: 'मीना कुमारी', phone: '7766554433', email: 'meena.k@gmail.com', entityType: 'Individual', tradeName: 'Meena WiFi Point' },
+    location: { city: 'Patna', pincode: '800001', address: '23, Boring Road, Patna' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: true, gstUploaded: true },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+  {
+    id: 'CSP-2026-0038',
+    submittedAt: '2026-03-16T13:00:00',
+    decision: 'approved',
+    personal: { name: 'विकास गुप्ता', phone: '9090909090', email: 'vikas.g@hotmail.com', entityType: 'Pvt Ltd', tradeName: 'VG Internet Solutions Pvt Ltd' },
+    location: { city: 'Nagpur', pincode: '440001', address: '56, Sitabuldi, Nagpur' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: true, gstUploaded: true },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+  {
+    id: 'CSP-2026-0037',
+    submittedAt: '2026-03-16T10:30:00',
+    decision: null,
+    personal: { name: 'रवि प्रसाद', phone: '8585858585', email: 'ravi.prasad@gmail.com', entityType: 'Individual', tradeName: 'Ravi Broadband' },
+    location: { city: 'Ranchi', pincode: '834001', address: '9, Main Road, Ranchi' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: true, gstUploaded: false },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+  {
+    id: 'CSP-2026-0036',
+    submittedAt: '2026-03-15T15:45:00',
+    decision: 'rejected',
+    personal: { name: 'आशा पटेल', phone: '7878787878', email: 'asha.p@gmail.com', entityType: 'Individual', tradeName: 'Asha Net Services' },
+    location: { city: 'Ahmedabad', pincode: '380001', address: '34, CG Road, Ahmedabad' },
+    kyc: { panUploaded: true, aadhaarFrontUploaded: true, aadhaarBackUploaded: true, gstUploaded: true },
+    registrationFee: { amount: 2000, paid: true },
+    docs: null,
+  },
+];
+
+// ─── Initialize ─────────────────────────────────────────
+function init() {
+  // Load saved decisions from localStorage
+  const saved = JSON.parse(localStorage.getItem('wiom_qa_decisions') || '{}');
+  applications = MOCK_APPS.map(app => ({
+    ...app,
+    decision: saved[app.id] !== undefined ? saved[app.id] : app.decision,
+    isLive: false,
+  }));
+
+  // Try to load live device data
+  loadLiveApp();
+  renderFilterBar();
+  renderList();
+  checkStatus();
+  setInterval(checkStatus, 5000);
+  // Auto-refresh live app data every 5s
+  setInterval(loadLiveApp, 5000);
+}
+
+// ─── Load live app from emulator ────────────────────────
+async function loadLiveApp() {
+  try {
+    const res = await fetch(BRIDGE + '/data');
+    const data = await res.json();
+    if (data.error || data.currentScreen < 6) {
+      // Remove live app if not ready
+      applications = applications.filter(a => !a.isLive);
+      renderFilterBar();
+      renderList();
+      if (selectedAppId === 'LIVE_DEVICE') renderDetail('LIVE_DEVICE');
+      return;
+    }
+
+    const saved = JSON.parse(localStorage.getItem('wiom_qa_decisions') || '{}');
+    const liveApp = {
+      id: 'LIVE_DEVICE',
+      submittedAt: new Date().toISOString(),
+      decision: saved['LIVE_DEVICE'] !== undefined ? saved['LIVE_DEVICE'] : (data.qaRejected ? 'rejected' : (data.currentScreen > 6 ? 'approved' : null)),
+      personal: data.personal || {},
+      location: data.location || {},
+      kyc: data.kyc || {},
+      registrationFee: data.registrationFee || { amount: 2000, paid: true },
+      isLive: true,
+      _raw: data,
+    };
+
+    // Replace or add live app at top
+    applications = [liveApp, ...applications.filter(a => !a.isLive)];
+    renderFilterBar();
+    renderList();
+    if (selectedAppId === 'LIVE_DEVICE') renderDetail('LIVE_DEVICE');
+  } catch (e) {
+    // Bridge offline — keep existing list
+  }
+}
+
+// ─── Save decision ──────────────────────────────────────
+function saveDecision(appId, decision) {
+  const saved = JSON.parse(localStorage.getItem('wiom_qa_decisions') || '{}');
+  saved[appId] = decision;
+  localStorage.setItem('wiom_qa_decisions', JSON.stringify(saved));
+
+  // Update in-memory
+  const app = applications.find(a => a.id === appId);
+  if (app) app.decision = decision;
+}
+
+// ─── QA Actions ─────────────────────────────────────────
+async function makeDecision(appId, decision) {
+  saveDecision(appId, decision);
+
+  // If live device, also send to app
+  if (appId === 'LIVE_DEVICE') {
+    try {
+      await fetch(BRIDGE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'qa', decision }) });
+    } catch (e) { console.error(e); }
+  }
+
+  showToast(decision === 'approved' ? '✅ Application APPROVED' : '❌ Application REJECTED — Refund initiated');
+  renderFilterBar();
+  renderList();
+  renderDetail(appId);
+}
+
+function reverseDecision(appId) {
+  saveDecision(appId, null);
+
+  // If live device, navigate back to QA screen
+  if (appId === 'LIVE_DEVICE') {
+    fetch(BRIDGE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'navigate', screen: 6 }) }).catch(() => {});
+  }
+
+  showToast('↩ Decision reversed — back to Pending');
+  renderFilterBar();
+  renderList();
+  renderDetail(appId);
+}
+
+// ─── Render Filter Bar ──────────────────────────────────
+function renderFilterBar() {
+  const total = applications.length;
+  const pending = applications.filter(a => a.decision === null).length;
+  const approved = applications.filter(a => a.decision === 'approved').length;
+  const rejected = applications.filter(a => a.decision === 'rejected').length;
+
+  document.getElementById('filterBar').innerHTML = `
+    <div class="stat-chip stat-all ${activeFilter === 'all' ? 'active' : ''}" onclick="setFilter('all')">All ${total}</div>
+    <div class="stat-chip stat-pending ${activeFilter === 'pending' ? 'active' : ''}" onclick="setFilter('pending')">⏳ Pending ${pending}</div>
+    <div class="stat-chip stat-approved ${activeFilter === 'approved' ? 'active' : ''}" onclick="setFilter('approved')">✅ Approved ${approved}</div>
+    <div class="stat-chip stat-rejected ${activeFilter === 'rejected' ? 'active' : ''}" onclick="setFilter('rejected')">❌ Rejected ${rejected}</div>
+  `;
+}
+
+function setFilter(filter) {
+  activeFilter = filter;
+  renderFilterBar();
+  renderList();
+}
+
+// ─── Render Application List ────────────────────────────
+function renderList() {
+  const search = document.getElementById('searchBox').value.toLowerCase();
+  const container = document.getElementById('appList');
+
+  let filtered = applications;
+
+  // Filter by status
+  if (activeFilter === 'pending') filtered = filtered.filter(a => a.decision === null);
+  else if (activeFilter === 'approved') filtered = filtered.filter(a => a.decision === 'approved');
+  else if (activeFilter === 'rejected') filtered = filtered.filter(a => a.decision === 'rejected');
+
+  // Filter by search
+  if (search) {
+    filtered = filtered.filter(a => {
+      const haystack = [a.personal.name, a.personal.phone, a.personal.tradeName, a.location.city, a.id].join(' ').toLowerCase();
+      return haystack.includes(search);
+    });
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="text-align:center;padding:40px 16px;color:#665e75;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-size:13px;">No applications found</div></div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(app => {
+    const isSelected = selectedAppId === app.id;
+    const statusTag = app.decision === 'approved' ? '<span class="app-tag tag-approved">✅ Approved</span>'
+      : app.decision === 'rejected' ? '<span class="app-tag tag-rejected">❌ Rejected</span>'
+      : '<span class="app-tag tag-pending">⏳ Pending Review</span>';
+
+    const k = app.kyc || {};
+    const kycCount = [k.panUploaded, k.aadhaarFrontUploaded, k.aadhaarBackUploaded, k.gstUploaded].filter(Boolean).length;
+    const timeAgo = getTimeAgo(app.submittedAt);
+
+    return `
+      <div class="app-card ${isSelected ? 'selected' : ''}" onclick="selectApp('${app.id}')">
+        ${app.isLive ? '<div class="live-badge">🔴 LIVE</div>' : ''}
+        <div class="app-name">${app.personal.name || 'Unknown'}</div>
+        <div class="app-phone">${app.personal.phone || '—'} · ${app.location.city || '—'}</div>
+        <div class="app-meta">
+          ${statusTag}
+          <span class="app-tag" style="background:#2d1f3e;color:#a7a1b2;">KYC ${kycCount}/4</span>
+          <span class="app-time">${timeAgo}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ─── Select & Render Detail ─────────────────────────────
+function selectApp(appId) {
+  selectedAppId = appId;
+  renderList(); // update selected state
+  renderDetail(appId);
+}
+
+function renderDetail(appId) {
+  const app = applications.find(a => a.id === appId);
+  const panel = document.getElementById('detailPanel');
+
+  if (!app) {
+    panel.innerHTML = `<div class="empty-detail"><div class="icon">👈</div><h2>Select an Application</h2><p>Click on any application from the list to review details.</p></div>`;
+    return;
+  }
+
+  const p = app.personal || {};
+  const l = app.location || {};
+  const k = app.kyc || {};
+  const rf = app.registrationFee || {};
+  const kycCount = [k.panUploaded, k.aadhaarFrontUploaded, k.aadhaarBackUploaded, k.gstUploaded].filter(Boolean).length;
+
+  // Decision buttons
+  let decisionHtml = '';
+  if (app.decision === null) {
+    decisionHtml = `
+      <div class="decision-box">
+        <button class="qa-btn qa-btn-approve" onclick="makeDecision('${app.id}', 'approved')">✓ Approve</button>
+        <button class="qa-btn qa-btn-reject" onclick="makeDecision('${app.id}', 'rejected')">✗ Reject</button>
+      </div>
+    `;
+  } else if (app.decision === 'approved') {
+    decisionHtml = `
+      <div class="decision-box">
+        <div class="current-decision decision-approved">✅ Approved</div>
+        <button class="qa-btn qa-btn-reverse" onclick="reverseDecision('${app.id}')">↩ Change Decision</button>
+      </div>
+    `;
+  } else {
+    decisionHtml = `
+      <div class="decision-box">
+        <div class="current-decision decision-rejected">❌ Rejected</div>
+        <button class="qa-btn qa-btn-reverse" onclick="reverseDecision('${app.id}')">↩ Change Decision</button>
+      </div>
+    `;
+  }
+
+  panel.innerHTML = `
+    <!-- Top: Name + Decision -->
+    <div class="detail-top">
+      <div class="detail-applicant">
+        <h2>${p.name || 'Unknown Applicant'} ${app.isLive ? '<span style="font-size:12px;background:#D9008D;color:#fff;padding:2px 8px;border-radius:4px;vertical-align:middle;">🔴 LIVE DEVICE</span>' : ''}</h2>
+        <div class="sub"><strong>${app.id}</strong> · Submitted ${formatDate(app.submittedAt)} · ${p.tradeName || '—'}</div>
+      </div>
+      ${decisionHtml}
+    </div>
+
+    <!-- Summary Strip -->
+    <div class="summary-strip">
+      <div class="summary-chip">
+        <div class="val">${p.phone || '—'}</div>
+        <div class="lbl">Phone</div>
+      </div>
+      <div class="summary-chip">
+        <div class="val">${p.entityType || '—'}</div>
+        <div class="lbl">Entity Type</div>
+      </div>
+      <div class="summary-chip">
+        <div class="val" style="color:${kycCount === 4 ? '#00c853' : kycCount > 0 ? '#e67e00' : '#d92130'};">${kycCount}/4</div>
+        <div class="lbl">KYC Docs</div>
+      </div>
+      <div class="summary-chip">
+        <div class="val" style="color:${rf.paid ? '#00c853' : '#d92130'};">${rf.paid ? '✅ Paid' : '❌ No'}</div>
+        <div class="lbl">₹2K Fee</div>
+      </div>
+      <div class="summary-chip">
+        <div class="val">${l.city || '—'}</div>
+        <div class="lbl">City</div>
+      </div>
+    </div>
+
+    <!-- Sections -->
+    <div id="sections"></div>
+  `;
+
+  // Render collapsible sections
+  const sections = document.getElementById('sections');
+
+  // 1. Personal Information
+  const personalFilled = !!(p.name || p.email || p.phone);
+  sections.appendChild(makeSection('👤', 'Personal Information', personalFilled ? 'Filled' : 'Empty', personalFilled ? 'badge-filled' : 'badge-empty', true, `
+    <div class="data-grid">
+      ${field('Full Name', p.name)}
+      ${field('Phone Number', p.phone)}
+      ${field('Email Address', p.email)}
+      ${field('Entity Type', p.entityType)}
+      ${field('Trade Name', p.tradeName, true)}
+    </div>
+  `));
+
+  // 2. Location Information
+  const locFilled = !!(l.city || l.pincode || l.address);
+  sections.appendChild(makeSection('📍', 'Location Information', locFilled ? 'Filled' : 'Empty', locFilled ? 'badge-filled' : 'badge-empty', true, `
+    <div class="data-grid">
+      ${field('City', l.city)}
+      ${field('Pincode', l.pincode)}
+      ${field('Full Address', l.address, true)}
+    </div>
+  `));
+
+  // 3. KYC Documents
+  const kycLabel = kycCount === 4 ? 'All Uploaded' : kycCount === 0 ? 'None' : `${kycCount}/4`;
+  const kycBadge = kycCount === 4 ? 'badge-filled' : kycCount === 0 ? 'badge-empty' : 'badge-partial';
+  sections.appendChild(makeSection('📄', 'KYC Documents', kycLabel, kycBadge, true, `
+    <div class="kyc-grid">
+      ${kycCard('🪪', 'PAN Card', k.panUploaded, app.id, 'pan')}
+      ${kycCard('📋', 'Aadhaar Front', k.aadhaarFrontUploaded, app.id, 'aadhaarFront')}
+      ${kycCard('📋', 'Aadhaar Back', k.aadhaarBackUploaded, app.id, 'aadhaarBack')}
+      ${kycCard('📑', 'GST Certificate', k.gstUploaded, app.id, 'gst')}
+    </div>
+  `));
+
+  // 4. Registration Fee
+  sections.appendChild(makeSection('💳', 'Registration Fee (₹2,000)', rf.paid ? 'Paid' : 'Not Paid', rf.paid ? 'badge-paid' : 'badge-empty', false, `
+    <div class="data-grid">
+      ${field('Amount', '₹' + (rf.amount || 2000).toLocaleString())}
+      ${field('Payment Status', rf.paid ? '✅ Paid' : '❌ Not Paid')}
+      ${field('Refundable', 'Yes — full refund if QA rejected', true)}
+    </div>
+  `));
+}
+
+// ─── Helpers ────────────────────────────────────────────
+function field(label, value, fullWidth) {
+  const empty = !value || value === '' || value === '—';
+  return `<div class="data-field${fullWidth ? ' full-width' : ''}">
+    <div class="data-label">${label}</div>
+    <div class="data-value${empty ? ' empty' : ''}">${empty ? 'Not provided' : value}</div>
+  </div>`;
+}
+
+function kycCard(icon, name, uploaded, appId, docKey) {
+  const clickable = uploaded ? 'clickable' : '';
+  const onclick = uploaded ? `onclick="viewDocument(event, '${appId}', '${docKey}', '${name}')"` : '';
+  return `<div class="kyc-card ${clickable}" ${onclick}>
+    <div class="kyc-icon">${icon}</div>
+    <div class="kyc-name">${name}</div>
+    <div class="kyc-status ${uploaded ? 'kyc-uploaded' : 'kyc-missing'}">${uploaded ? '✓' : '✗'}</div>
+    ${uploaded ? `<div class="kyc-view-btn">👁 View Document</div>` : ''}
+  </div>`;
+}
+
+function makeSection(icon, title, badgeText, badgeClass, startOpen, bodyHtml) {
+  const section = document.createElement('div');
+  section.className = 'section' + (startOpen ? ' open' : '');
+  section.innerHTML = `
+    <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+      <h3><span>${icon}</span> ${title}</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="section-badge ${badgeClass}">${badgeText}</span>
+        <span class="chevron">▼</span>
+      </div>
+    </div>
+    <div class="section-body">${bodyHtml}</div>
+  `;
+  return section;
+}
+
+function viewDocument(event, appId, docKey, docName) {
+  event.stopPropagation();
+  const app = applications.find(a => a.id === appId);
+  if (!app) return;
+
+  // Lazy-init docs for this app
+  if (!app.docs) app.docs = generateDocsForApp(app.personal);
+
+  const doc = app.docs[docKey];
+  if (!doc) return;
+
+  // Generate image lazily
+  const imgSrc = getDocImage(app.docs, docKey);
+
+  const docTypeMap = { pan: 'PAN Card', aadhaarFront: 'Aadhaar (Front)', aadhaarBack: 'Aadhaar (Back)', gst: 'GST Certificate' };
+  const docTitle = docTypeMap[docKey] || docName;
+  const isPdf = doc.fileType === 'PDF';
+
+  document.getElementById('docViewer').innerHTML = `
+    <div class="doc-viewer-header">
+      <h3>📄 ${docTitle} <span class="doc-type-badge">${isPdf ? 'PDF' : 'IMAGE'}</span></h3>
+    </div>
+    <div class="doc-viewer-body">
+      <img class="doc-image" src="${imgSrc}" alt="${docTitle}">
+    </div>
+    <div class="doc-viewer-footer">
+      <div class="doc-meta">
+        <strong>${doc.fileType}</strong> · ${doc.fileSize} · Uploaded ${doc.uploadedAt}<br>
+        <span style="color:#a7a1b2;">Applicant: ${app.personal.name} (${app.id})</span>
+      </div>
+      <div class="doc-actions">
+        <button class="doc-action-btn" onclick="zoomDoc()">🔍 Zoom</button>
+        <button class="doc-action-btn" onclick="closeOverlay()">✕ Close</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('show');
+}
+
+let isZoomed = false;
+function zoomDoc() {
+  const img = document.querySelector('.doc-image');
+  if (!img) return;
+  isZoomed = !isZoomed;
+  img.style.transform = isZoomed ? 'scale(1.8)' : 'scale(1)';
+  img.style.cursor = isZoomed ? 'zoom-out' : 'zoom-in';
+  img.style.transition = 'transform 0.2s';
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+  isZoomed = false;
+}
+
+function getTimeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return 'Just now';
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+async function checkStatus() {
+  try {
+    const res = await fetch(BRIDGE + '/status');
+    const data = await res.json();
+    document.getElementById('statusDot').className = 'status-dot ' + (data.connected ? 'on' : 'off');
+    document.getElementById('statusText').textContent = data.connected ? 'Device Connected' : 'No Device';
+  } catch (e) {
+    document.getElementById('statusDot').className = 'status-dot off';
+    document.getElementById('statusText').textContent = 'Bridge Offline';
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
+
+// ─── Start ──────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

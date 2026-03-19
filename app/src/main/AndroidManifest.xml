@@ -36,6 +36,7 @@
                 <action android:name="com.wiom.csp.FILL"/>
                 <action android:name="com.wiom.csp.QA"/>
                 <action android:name="com.wiom.csp.TRAINING"/>
+                <action android:name="com.wiom.csp.DUMP_STATE"/>
             </intent-filter>
         </receiver>
     </application>

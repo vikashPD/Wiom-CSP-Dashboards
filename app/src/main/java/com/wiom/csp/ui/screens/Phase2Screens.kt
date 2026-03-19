@@ -27,7 +27,7 @@ import kotlinx.coroutines.delay
 // Screen 6: QA Investigation
 @Composable
 fun QaInvestigationScreen(onNext: () -> Unit) {
-    var qaRejected by remember { mutableStateOf(OnboardingState.qaRejected) }
+    val qaRejected = OnboardingState.qaRejected
 
     Column(modifier = Modifier.fillMaxSize().background(WiomSurface)) {
         AppHeader(title = if (qaRejected) t("Application स्टेटस", "Application Status") else t("Application स्टेटस", "Application Status"))
@@ -82,7 +82,6 @@ fun QaInvestigationScreen(onNext: () -> Unit) {
                     WiomButton(
                         "← ${t("Approved Path देखें", "View Approved Path")}",
                         onClick = {
-                            qaRejected = false
                             OnboardingState.qaRejected = false
                         },
                         isSecondary = true,
